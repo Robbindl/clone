@@ -45,13 +45,14 @@ python .\local_server.py another_clone --port 8002
 
 Open `http://localhost:8002` in your browser.
 
-For the included Feathery capture, use:
+If the cloned site has a nested route, open it under the same local path. For example,
+if the source URL was `https://example.com/products/item`, use:
 
 ```powershell
-python .\local_server.py cloned_site --port 8001
+python .\local_server.py another_clone --port 8002
 ```
 
-Then open `http://localhost:8001/form.feathery.io/to/YAaOHQ`.
+Then open `http://localhost:8002/example.com/products/item`.
 
 ## Limitations
 
