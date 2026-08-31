@@ -6,6 +6,9 @@ env/
 # Generated clone output
 cloned_site/
 
+# Node dependencies
+node_modules/
+
 # Python bytecode and caches
 __pycache__/
 *.py[cod]
