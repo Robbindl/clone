@@ -76,6 +76,9 @@ Set `MONGODB_URI` in `.env`. The default local value is:
 mongodb://127.0.0.1:27017/cloned_site
 ```
 
+For a separate Binance database, set `MONGODB_BINANCE_URI` as well. The local
+default is `mongodb://127.0.0.1:27017/binance`.
+
 Start the site and API together:
 
 ```powershell
