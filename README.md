@@ -101,6 +101,10 @@ reported that the field was required.
 
 The cloner captures publicly downloadable frontend assets. Sites that depend on private APIs, authentication, server-side sessions, or protected runtime data may not work as complete offline copies. Use an official export or API for sites you own.
 
+## Local Working Directories
+
+The `binance_clone_playwright/` directory is used for local development and testing only. It is not tracked in version control (see `.gitignore`).
+
 ## Files
 
 - `cloner.py` downloads and processes site assets.
