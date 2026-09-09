@@ -6,6 +6,9 @@ env/
 # Generated clone output
 cloned_site/
 
+# Binance clone playwright
+binance_clone_playwright/
+
 # Node dependencies
 node_modules/
 
