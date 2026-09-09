@@ -2,6 +2,7 @@
 """
 Website Cloner Script
 Downloads an entire website for offline viewing.
+Supports multiple rendering engines: requests, playwright, selenium, puppeteer
 """
 
 import requests
@@ -18,7 +19,7 @@ from urllib.robotparser import RobotFileParser
 
 
 class WebsiteCloner:
-    def __init__(self, base_url, output_dir="cloned_site", delay=1, respect_robots=True):
+    def __init__(self, base_url, output_dir="cloned_site", delay=1, respect_robots=True, renderer="requests"):
         self.base_url = base_url.rstrip('/')
         self.domain = urllib.parse.urlparse(base_url).netloc
         self.output_dir = Path(output_dir)
@@ -26,6 +27,11 @@ class WebsiteCloner:
         self.delay = delay
         self.respect_robots = respect_robots
         self.follow_pages = False
+        self.renderer = renderer
+        self.browser = None
+        self.playwright_browser = None
+        self.selenium_driver = None
+        
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -41,6 +47,141 @@ class WebsiteCloner:
                 self.rp.read()
             except:
                 self.rp = None
+        
+        # Initialize browser if needed
+        self._init_browser()
+    
+    def _init_browser(self):
+        """Initialize browser for JavaScript rendering"""
+        if self.renderer == "playwright":
+            try:
+                from playwright.sync_api import sync_playwright
+                self._playwright = sync_playwright().start()
+                self.playwright_browser = self._playwright.chromium.launch(headless=True)
+                print("[INFO] Playwright browser initialized")
+            except ImportError:
+                print("[WARNING] Playwright not installed. Install with: pip install playwright")
+                self.renderer = "requests"
+        elif self.renderer == "selenium":
+            try:
+                from selenium import webdriver
+                from selenium.webdriver.common.by import By
+                self.selenium_driver = webdriver.Chrome()
+                print("[INFO] Selenium WebDriver initialized")
+            except ImportError:
+                print("[WARNING] Selenium not installed. Install with: pip install selenium")
+                self.renderer = "requests"
+            except Exception as e:
+                print(f"[WARNING] Selenium initialization failed: {e}")
+                self.renderer = "requests"
+        elif self.renderer == "puppeteer":
+            try:
+                import asyncio
+                import pyppeteer
+                print("[INFO] Puppeteer (pyppeteer) will be used for rendering")
+            except ImportError:
+                print("[WARNING] Pyppeteer not installed. Install with: pip install pyppeteer")
+                self.renderer = "requests"
+    
+    def _fetch_with_renderer(self, url):
+        """Fetch page content using the configured renderer"""
+        if self.renderer == "playwright":
+            return self._fetch_playwright(url)
+        elif self.renderer == "selenium":
+            return self._fetch_selenium(url)
+        elif self.renderer == "puppeteer":
+            return self._fetch_puppeteer(url)
+        else:
+            return self._fetch_requests(url)
+    
+    def _fetch_requests(self, url):
+        """Fetch using requests library"""
+        try:
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            return response
+        except Exception as e:
+            print(f"  ✗ Error fetching {url}: {e}")
+            return None
+    
+    def _fetch_playwright(self, url):
+        """Fetch using Playwright (renders JavaScript)"""
+        try:
+            page = self.playwright_browser.new_page()
+            page.goto(url, wait_until="networkidle")
+            content = page.content()
+            page.close()
+            
+            # Create a response-like object
+            class PlaywrightResponse:
+                def __init__(self, content):
+                    self.content = content.encode('utf-8')
+                    self.text = content
+                    self.headers = {'content-type': 'text/html'}
+                    self.status_code = 200
+            
+            return PlaywrightResponse(content)
+        except Exception as e:
+            print(f"  ✗ Playwright error fetching {url}: {e}")
+            return None
+    
+    def _fetch_selenium(self, url):
+        """Fetch using Selenium (renders JavaScript)"""
+        try:
+            self.selenium_driver.get(url)
+            time.sleep(2)  # Wait for page to render
+            content = self.selenium_driver.page_source
+            
+            # Create a response-like object
+            class SeleniumResponse:
+                def __init__(self, content):
+                    self.content = content.encode('utf-8')
+                    self.text = content
+                    self.headers = {'content-type': 'text/html'}
+                    self.status_code = 200
+            
+            return SeleniumResponse(content)
+        except Exception as e:
+            print(f"  ✗ Selenium error fetching {url}: {e}")
+            return None
+    
+    def _fetch_puppeteer(self, url):
+        """Fetch using Pyppeteer (renders JavaScript)"""
+        try:
+            import asyncio
+            from pyppeteer import launch
+            
+            async def fetch_async():
+                browser = await launch(headless=True)
+                page = await browser.newPage()
+                await page.goto(url, waitUntil='networkidle')
+                content = await page.content()
+                await browser.close()
+                return content
+            
+            content = asyncio.run(fetch_async())
+            
+            # Create a response-like object
+            class PuppeteerResponse:
+                def __init__(self, content):
+                    self.content = content.encode('utf-8')
+                    self.text = content
+                    self.headers = {'content-type': 'text/html'}
+                    self.status_code = 200
+            
+            return PuppeteerResponse(content)
+        except Exception as e:
+            print(f"  ✗ Puppeteer error fetching {url}: {e}")
+            return None
+    
+    def cleanup(self):
+        """Clean up browser resources"""
+        if self.playwright_browser:
+            self.playwright_browser.close()
+            print("[INFO] Playwright browser closed")
+        if self.selenium_driver:
+            self.selenium_driver.quit()
+            print("[INFO] Selenium driver closed")
     
     def can_fetch(self, url):
         """Check robots.txt permission"""
@@ -70,8 +211,11 @@ class WebsiteCloner:
     def download_file(self, url, local_path):
         """Download a single file"""
         try:
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
+            response = self._fetch_with_renderer(url)
+            if not response:
+                return None
+            
+            response.raise_for_status() if hasattr(response, 'raise_for_status') else None
             
             local_path.parent.mkdir(parents=True, exist_ok=True)
             
@@ -319,11 +463,14 @@ def main():
     parser.add_argument('--depth', type=int, default=10, help='Maximum crawl depth')
     parser.add_argument('--follow-pages', action='store_true', help='Also crawl same-domain navigation links')
     parser.add_argument('--no-robots', action='store_true', help='Ignore robots.txt')
+    parser.add_argument('--renderer', choices=['requests', 'playwright', 'selenium', 'puppeteer'], 
+                        default='requests', help='Rendering engine for JavaScript-heavy sites')
     
     args = parser.parse_args()
     
     print(f"Starting clone of {args.url}")
     print(f"Output directory: {args.output}")
+    print(f"Renderer: {args.renderer}")
     print(f"Delay: {args.delay}s | Max depth: {args.depth}")
     print("-" * 50)
     
@@ -331,7 +478,8 @@ def main():
         args.url,
         output_dir=args.output,
         delay=args.delay,
-        respect_robots=not args.no_robots
+        respect_robots=not args.no_robots,
+        renderer=args.renderer
     )
     cloner.follow_pages = args.follow_pages
     
@@ -339,6 +487,8 @@ def main():
         cloner.clone(max_depth=args.depth)
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
+    finally:
+        cloner.cleanup()
     
     print("-" * 50)
     cloner.mirror_root_assets()
