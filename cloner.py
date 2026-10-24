@@ -196,7 +196,11 @@ class WebsiteCloner:
         
         # Handle query strings by incorporating them into filename
         if parsed.query:
-            path = f"{path}_{urllib.parse.quote(parsed.query, safe='')}"
+            # Keep query separators that are valid in a Windows filename.
+            # Browsers decode %3D/%26 in a URL path before requesting the
+            # file, so encoding '=' and '&' here would make versioned assets
+            # return 404 from the local server.
+            path = f"{path}_{urllib.parse.quote(parsed.query, safe='=&,')}"
         
         # Default to index.html for directories
         if not path or path.endswith('/'):
@@ -240,6 +244,20 @@ class WebsiteCloner:
         for tag in soup.find_all(['script', 'img', 'source', 'video', 'audio'], src=True):
             full_url = urllib.parse.urljoin(base_url, tag['src'])
             links.append(full_url)
+
+        # Responsive images keep their larger variants in srcset. Download
+        # every candidate so the browser can choose the correct one for the
+        # current viewport instead of falling back to a missing image.
+        for tag in soup.find_all(attrs={'srcset': True}):
+            for candidate in tag['srcset'].split(','):
+                value = candidate.strip().split(maxsplit=1)
+                if value:
+                    links.append(urllib.parse.urljoin(base_url, value[0]))
+
+        # SVG sprites are commonly referenced through <use href="...">.
+        for tag in soup.find_all('use', href=True):
+            full_url = urllib.parse.urljoin(base_url, tag['href'])
+            links.append(full_url)
         
         # Inline styles with url()
         for tag in soup.find_all(style=True):
@@ -278,7 +296,7 @@ class WebsiteCloner:
                 return url
         
         # Update href attributes
-        for tag in soup.find_all(['a', 'link'], href=True):
+        for tag in soup.find_all(['a', 'link', 'use'], href=True):
             tag['href'] = make_relative(urllib.parse.urljoin(base_url, tag['href']))
         
         # Update src attributes
@@ -410,6 +428,13 @@ class WebsiteCloner:
                 
                 # Extract and follow asset links
                 links = self.extract_links(soup, url)
+
+                # Capture navigation URLs before rewriting the document to
+                # local paths. Otherwise --follow-pages would try to fetch
+                # rewritten names such as /personal/index.html from the
+                # remote site instead of the original /personal/ URL.
+                if self.follow_pages:
+                    links.extend(self.extract_page_links(soup, url))
                 
                 # Update links to local paths
                 soup = self.update_html_links(soup, url)
@@ -418,10 +443,6 @@ class WebsiteCloner:
                 with open(local_path, 'w', encoding='utf-8') as f:
                     f.write(str(soup))
                 
-                # Follow navigation only when explicitly requested.
-                if self.follow_pages:
-                    links.extend(self.extract_page_links(soup, url))
-
                 # Follow links with delay
                 for link in links:
                     time.sleep(self.delay)

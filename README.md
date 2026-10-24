@@ -54,51 +54,12 @@ python .\local_server.py another_clone --port 8002
 
 Then open `http://localhost:8002/example.com/products/item`.
 
-## Save form submissions to MongoDB
+## Standalone Feathery form
 
-The cloned form is connected to `POST /api/submit`. The endpoint stores each
-submission in the MongoDB `submissions` collection with the form route,
-submitted data, page URL, and a server timestamp. Dynamic form fields are
-stored under `data`, so new form steps do not require a schema change.
-Changes and step navigation from one form session update the same record;
-a new page load gets a new client submission ID and creates a new record.
-
-Install the server dependencies:
-
-```powershell
-npm install
-Copy-Item .env.example .env
-```
-
-Set `MONGODB_URI` in `.env`. The default local value is:
-
-```text
-mongodb://127.0.0.1:27017/cloned_site
-```
-
-For a separate Binance database, set `MONGODB_BINANCE_URI` as well. The local
-default is `mongodb://127.0.0.1:27017/binance`.
-
-Start the site and API together:
-
-```powershell
-npm start
-```
-
-Keep that PowerShell window open while using the form. If the browser has
-remembered an older broken script, refresh the form with `Ctrl+F5` once.
-
-Open `http://localhost:8002/form.feathery.io/to/YAaOHQ`. Check the API with
-`http://localhost:8002/api/health`. View saved entries in MongoDB Compass or
-with `mongosh`, using database `cloned_site` and collection `submissions`.
-
-Use the Node/Express server above when testing submissions; `local_server.py`
-only serves static files and does not provide the API.
-
-The cloned form's phone-formatting JavaScript asset was repaired because the
-downloaded copy contained an HTML error page instead of JavaScript. Without
-that asset, the phone input stayed controlled at its placeholder value and
-reported that the field was required.
+The Feathery form, its Node/MongoDB server, and its local environment
+configuration have been moved into a separate working folder on this PC. The
+Python cloner in this repository is independent of that running form. See the
+standalone folder's `README.md` for startup and database details.
 
 ## Limitations
 

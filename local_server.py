@@ -20,6 +20,35 @@ class SPARequestHandler(SimpleHTTPRequestHandler):
     def guess_type(self, path):
         if Path(path).suffix == "" and Path(path + ".html").is_file():
             return "text/html"
+        lowered = path.lower()
+        known_types = {
+            ".webp": "image/webp",
+            ".svg": "image/svg+xml",
+            ".woff2": "font/woff2",
+            ".woff": "font/woff",
+            ".ttf": "font/ttf",
+        }
+        suffix = Path(path).suffix.lower()
+        if suffix in known_types:
+            return known_types[suffix]
+        # Cloned assets can include a query string in the filename, for
+        # example style.css_ver=abc123. The standard MIME lookup sees that
+        # as an unknown extension, so identify the original asset type.
+        versioned_types = {
+            ".css_": "text/css",
+            ".js_": "application/javascript",
+            ".svg_": "image/svg+xml",
+            ".png_": "image/png",
+            ".jpg_": "image/jpeg",
+            ".jpeg_": "image/jpeg",
+            ".webp_": "image/webp",
+            ".woff2_": "font/woff2",
+            ".woff_": "font/woff",
+            ".ttf_": "font/ttf",
+        }
+        for marker, content_type in versioned_types.items():
+            if marker in lowered:
+                return content_type
         return mimetypes.guess_type(path)[0] or "application/octet-stream"
 
 
