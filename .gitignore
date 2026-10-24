@@ -5,6 +5,7 @@ env/
 
 # Generated clone output
 cloned_site/
+*_clone/
 
 # Binance clone playwright
 binance_clone_playwright/
